@@ -203,6 +203,25 @@
             </div>
         </main>
 
+<!-- 留言框 -->
+<div class="bg-white rounded-xl p-4 shadow-md mt-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+        <i class="fa-solid fa-comment-dots mr-2 text-primary"></i>留言反馈
+    </h2>
+    <div id="status" class="mb-3 text-sm"></div>
+    
+    <form id="留言Form">
+        <div class="mb-4">
+ 
+            <textarea id="内容" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition-all" placeholder="请输入留言内容..." required></textarea>
+        </div>
+        
+        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 hover:shadow-lg flex items-center justify-center">
+            <i class="fa-solid fa-paper-plane mr-2"></i>发送留言
+        </button>
+    </form>
+</div>
+
         <footer class="mt-8 text-center text-xs text-gray-500">
             <p>© 2025 销售提成计算器 | 数据自动保存在本地 | 累计访问量:<span id="finicount_views"></span></p>
         </footer>
@@ -725,6 +744,40 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMReady', init());
         window.addEventListener('load', init());
+
+        //留言框
+    const pushKey = 'PDU33544TSI25TKY3JdauU0KwPSzTCRYwZFY91Kxu';
+    const apiUrl = 'https://api2.pushdeer.com/message/push';
+
+    document.getElementById('留言Form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const 内容 = document.getElementById('内容').value;
+        
+        // 立即显示"大概已经留言成功"
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = '大概已经留言成功。';
+        statusDiv.classList.remove('hidden', 'text-red-500');
+        statusDiv.classList.add('text-green-500', 'animate-fade-in');
+
+        // 发送请求（不等待响应）
+        fetch(apiUrl, {
+            method: 'POST',
+            body: new URLSearchParams({
+                pushkey: pushKey,
+                text: 内容,  // 直接使用内容作为消息文本
+                type: 'text'
+            })
+        });
+
+        // 清空表单
+        document.getElementById('内容').value = '';
+        
+        // 3秒后清除提示
+        setTimeout(() => {
+            statusDiv.textContent = '';
+        }, 3000);
+    });
+
     </script>
 </body>
 </html>    
