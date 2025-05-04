@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提成计算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#6366F1',
+                        neutral: '#6B7280',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+            .input-focus {
+                @apply focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none;
+            }
+            .btn-hover {
+                @apply hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200;
+            }
+            .rule-container {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.5s ease-out;
+            }
+            .rule-container.open {
+                max-height: 800px;
+                transition: max-height 0.5s ease-in;
+            }
+            .row-enter {
+                animation: rowEnter 0.3s ease-out forwards;
+            }
+            @keyframes rowEnter {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .row-exit {
+                animation: rowExit 0.3s ease-in forwards;
+            }
+            @keyframes rowExit {
+                from { opacity: 1; transform: translateY(0); }
+                to { opacity: 0; transform: translateY(10px); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-gray-800 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-primary mb-2">提成计算器</h1>
+            <p class="text-neutral">快速计算销售提成和业绩目标</p>
+        </header>
+
+        <main class="space-y-6">
+            <!-- 输入和结果区域 - 响应式布局 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 输入区域 -->
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="fa-solid fa-calculator mr-2 text-primary"></i>输入数据
+                    </h2>
+                    <div class="grid md:grid-cols-3 gap-3">
+                        <div>
+                            <label for="liangji" class="block text-xs font-medium text-gray-700 mb-1">量级</label>
+                            <input type="number" id="liangji" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg input-focus text-sm" placeholder="请输入量级" required>
+                        </div>
+                        <div>
+                            <label for="gmv" class="block text-xs font-medium text-gray-700 mb-1">GMV</label>
+                            <input type="number" id="gmv" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg input-focus text-sm" placeholder="请输入GMV" required>
+                        </div>
+                        <div>
+                            <label for="orderSize" class="block text-xs font-medium text-gray-700 mb-1">平均单量大小</label>
+                            <input type="number" id="orderSize" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg input-focus text-sm" placeholder="默认2580">
+                        </div>
+                    </div>
+                    <button id="calculateBtn" class="mt-3 w-full bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg btn-hover flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-calculator mr-2"></i>计算提成
+                    </button>
+                </div>
+
+                <!-- 结果区域 -->
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="fa-solid fa-table mr-2 text-secondary"></i>计算结果
+                    </h2>
+                    <div id="resultContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3" style="display: none;">
+                        <div class="bg-gray-50 p-2.5 rounded-lg">
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">R值</span>
+                                <span id="rValue" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">提点</span>
+                                <span id="commissionRate" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">提成</span>
+                                <span id="commissionAmount" class="font-semibold text-secondary">--</span>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-2.5 rounded-lg">
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">下一档提点</span>
+                                <span id="nextTierRate" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">距离跳点</span>
+                                <span id="distanceToNextTier" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-1.5 text-sm">
+                                <span class="text-gray-600">差整单</span>
+                                <span id="diffWholeOrders" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-gray-600">跳点后提成</span>
+                                <span id="nextTierCommission" class="font-semibold text-secondary">--</span>
+                            </div>
+                            <div class="flex justify-between items-center mt-1.5 text-sm">
+                                <span class="text-gray-600">多赚金额</span>
+                                <span id="extraEarnings" class="font-semibold text-accent">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 提点规则设置 - 默认隐藏，点击按钮显示，支持动态添加/删除 -->
+            <div class="bg-white rounded-xl p-4 card-shadow">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold text-gray-800 flex items-center cursor-pointer" id="toggleRulesBtn">
+                        <i class="fa-solid fa-sliders mr-2 text-accent"></i>
+                        <span id="rulesBtnText">提点规则设置</span>
+                        <i id="rulesBtnIcon" class="fa-solid fa-chevron-down ml-2 text-gray-500 transition-transform duration-300"></i>
+                    </h2>
+                </div>
+                
+                <div id="rulesContainer" class="rule-container">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">R值范围</th>
+                                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">提点(%)</th>
+                                    <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rulesTable" class="bg-white divide-y divide-gray-200">
+                                <!-- JavaScript 动态生成规则行 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex space-x-3 mt-3">
+                        <button id="addRuleBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg btn-hover flex items-center justify-center text-sm">
+                            <i class="fa-solid fa-plus mr-2"></i>添加档位
+                        </button>
+                        <button id="saveRulesBtn" class="flex-1 bg-accent hover:bg-accent/90 text-white font-medium py-2 px-4 rounded-lg btn-hover flex items-center justify-center text-sm">
+                            <i class="fa-solid fa-save mr-2"></i>保存规则设置
+                        </button>
+                        <button id="resetRulesBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg btn-hover flex items-center justify-center text-sm">
+                            <i class="fa-solid fa-refresh mr-2"></i>重置默认值
+                        </button>
+                    </div>
+                    <div id="saveStatus" class="mt-2 text-center text-xs text-gray-500 hidden"></div>
+                </div>
+            </div>
+
+            <!-- 历史记录 -->
+            <div class="bg-white rounded-xl p-4 card-shadow">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                    <i class="fa-solid fa-history mr-2 text-primary"></i>历史计算记录
+                </h2>
+                <div id="historyContainer" class="space-y-2">
+                    <div class="text-center text-gray-500 py-3 text-sm" id="emptyHistory">
+                        暂无历史记录
+                    </div>
+                    <div id="historyList" class="space-y-1.5">
+                        <!-- JavaScript 动态生成历史记录 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="mt-8 text-center text-xs text-gray-500">
+            <p>© 2025 销售提成计算器 | 数据自动保存在本地</p>
+        </footer>
+    </div>
+
+    <script>
+        // 默认提点规则
+        const defaultCommissionRules = [
+            { min: -Infinity, max: 35, rate: 0 },
+            { min: 35, max: 45, rate: 0.01 },
+            { min: 45, max: 51, rate: 0.05 },
+            { min: 51, max: 56, rate: 0.07 },
+            { min: 56, max: 65, rate: 0.09 },
+            { min: 65, max: 85, rate: 0.12 },
+            { min: 85, max: Infinity, rate: 0.16 }
+        ];
+
+        // 从本地存储加载规则，若无则使用默认规则
+        let commissionRules = JSON.parse(localStorage.getItem('commissionRules')) || defaultCommissionRules;
+
+        // 从本地存储加载历史记录
+        let historyRecords = JSON.parse(localStorage.getItem('commissionHistory')) || [];
+
+        // 从本地存储加载平均单量大小，若无则使用默认值
+        let defaultOrderSize = parseFloat(localStorage.getItem('defaultOrderSize')) || 2580;
+
+        // 初始化规则表格
+        function initRulesTable() {
+            const tableBody = document.getElementById('rulesTable');
+            tableBody.innerHTML = '';
+
+            commissionRules.forEach((rule, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                row.classList.add('rule-row');
+                row.setAttribute('data-index', index);
+                
+                // 处理无穷大边界
+                const minDisplay = rule.min === -Infinity ? '负无穷' : rule.min;
+                const maxDisplay = rule.max === Infinity ? '正无穷' : rule.max;
+                
+                row.innerHTML = `
+                    <td class="px-3 py-1.5 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <input type="number" class="w-12 px-2 py-1 border border-gray-300 rounded text-xs input-focus" 
+                                value="${minDisplay}" data-index="${index}" data-field="min">
+                            <span class="mx-1 text-xs">≤ R值 <</span>
+                            <input type="number" class="w-12 px-2 py-1 border border-gray-300 rounded text-xs input-focus" 
+                                value="${maxDisplay}" data-index="${index}" data-field="max">
+                        </div>
+                    </td>
+                    <td class="px-3 py-1.5 whitespace-nowrap">
+                        <input type="number" class="w-14 px-2 py-1 border border-gray-300 rounded text-xs input-focus" 
+                            value="${(rule.rate * 100).toFixed(2)}" data-index="${index}" data-field="rate">
+                    </td>
+                    <td class="px-3 py-1.5 whitespace-nowrap text-center">
+                        ${commissionRules.length > 1 ? 
+                            `<button class="delete-rule text-red-500 hover:text-red-700 text-xs" data-index="${index}">
+                                <i class="fa-solid fa-trash"></i> 删除
+                            </button>` : ''
+                        }
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+                // 添加入场动画
+                setTimeout(() => {
+                    row.classList.add('row-enter');
+                }, 50 * index);
+            });
+            
+            // 添加删除规则事件
+            document.querySelectorAll('.delete-rule').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    deleteRule(index);
+                });
+            });
+        }
+
+        // 添加新规则
+        function addRule() {
+            // 获取当前规则中的最大值
+            const maxCurrentValue = commissionRules.reduce((max, rule) => {
+                if (rule.max !== Infinity && rule.max > max) {
+                    return rule.max;
+                }
+                return max;
+            }, -Infinity);
+            
+            // 创建新规则，范围为当前最大值+10
+            const newRule = {
+                min: maxCurrentValue,
+                max: maxCurrentValue + 10,
+                rate: 0.01
+            };
+            
+            // 添加到规则数组（倒数第二个位置，最后一个是无穷大）
+            commissionRules.splice(commissionRules.length - 1, 0, newRule);
+            
+            // 更新表格
+            initRulesTable();
+            
+            // 显示保存状态
+            const saveStatus = document.getElementById('saveStatus');
+            saveStatus.textContent = '已添加新档位，请调整范围和提点并保存';
+            saveStatus.classList.remove('hidden', 'text-green-500', 'text-red-500');
+            saveStatus.classList.add('text-accent');
+            saveStatus.style.display = 'block';
+            
+            // 3秒后隐藏状态
+            setTimeout(() => {
+                saveStatus.style.display = 'none';
+            }, 3000);
+        }
+
+        // 删除规则
+        function deleteRule(index) {
+            // 不能删除最后一条规则（无穷大那条）
+            if (commissionRules.length <= 1) {
+                alert('至少需要保留一个档位规则');
+                return;
+            }
+            
+            // 获取要删除的行
+            const row = document.querySelector(`.rule-row[data-index="${index}"]`);
+            if (row) {
+                // 添加退出动画
+                row.classList.add('row-exit');
+                
+                // 动画结束后删除
+                setTimeout(() => {
+                    // 从数组中删除
+                    commissionRules.splice(index, 1);
+                    
+                    // 更新表格
+                    initRulesTable();
+                    
+                    // 显示保存状态
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '已删除档位，请保存更改';
+                    saveStatus.classList.remove('hidden', 'text-green-500', 'text-red-500');
+                    saveStatus.classList.add('text-accent');
+                    saveStatus.style.display = 'block';
+                    
+                    // 3秒后隐藏状态
+                    setTimeout(() => {
+                        saveStatus.style.display = 'none';
+                    }, 3000);
+                }, 300);
+            }
+        }
+
+        // 保存规则到本地存储
+        function saveRules() {
+            // 从输入框收集规则数据
+            const inputs = document.querySelectorAll('#rulesTable input');
+            inputs.forEach(input => {
+                const index = parseInt(input.dataset.index);
+                const field = input.dataset.field;
+                let value = input.value;
+                
+                // 处理无穷大
+                if (value === '负无穷') value = -Infinity;
+                if (value === '正无穷') value = Infinity;
+                
+                // 转换为数值
+                if (field !== 'rate') {
+                    value = parseFloat(value);
+                } else {
+                    value = parseFloat(value) / 100; // 转换为小数
+                }
+                
+                commissionRules[index][field] = value;
+            });
+            
+            // 验证规则是否有效
+            if (!validateRules()) {
+                const saveStatus = document.getElementById('saveStatus');
+                saveStatus.textContent = '规则设置无效：范围有重叠或提点未递增';
+                saveStatus.classList.remove('hidden', 'text-green-500', 'text-accent');
+                saveStatus.classList.add('text-red-500');
+                saveStatus.style.display = 'block';
+                
+                // 3秒后隐藏状态
+                setTimeout(() => {
+                    saveStatus.style.display = 'none';
+                }, 3000);
+                return;
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('commissionRules', JSON.stringify(commissionRules));
+            
+            // 显示保存状态
+            const saveStatus = document.getElementById('saveStatus');
+            saveStatus.textContent = '规则已保存';
+            saveStatus.classList.remove('hidden', 'text-red-500');
+            saveStatus.classList.add('text-green-500');
+            saveStatus.style.display = 'block';
+            
+            // 3秒后隐藏状态
+            setTimeout(() => {
+                saveStatus.style.display = 'none';
+            }, 3000);
+        }
+
+        // 验证规则有效性
+        function validateRules() {
+            // 检查是否有重叠范围和提点是否递增
+            for (let i = 0; i < commissionRules.length - 1; i++) {
+                const current = commissionRules[i];
+                const next = commissionRules[i + 1];
+                
+                // 检查范围是否重叠或不连续
+                if (current.max !== next.min) {
+                    return false;
+                }
+                
+                // 检查提点是否递增
+                if (current.rate >= next.rate) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        // 重置规则为默认值
+        function resetRules() {
+            commissionRules = [...defaultCommissionRules];
+            initRulesTable();
+            
+            // 显示重置状态
+            const saveStatus = document.getElementById('saveStatus');
+            saveStatus.textContent = '已恢复默认规则';
+            saveStatus.classList.remove('hidden', 'text-green-500');
+            saveStatus.classList.add('text-accent');
+            saveStatus.style.display = 'block';
+            
+            // 3秒后隐藏状态
+            setTimeout(() => {
+                saveStatus.style.display = 'none';
+            }, 3000);
+        }
+
+        // 切换规则显示/隐藏
+        function toggleRules() {
+            const container = document.getElementById('rulesContainer');
+            const icon = document.getElementById('rulesBtnIcon');
+            const text = document.getElementById('rulesBtnText');
+            
+            if (container.classList.contains('open')) {
+                container.classList.remove('open');
+                icon.classList.remove('rotate-180');
+                text.textContent = '提点规则设置';
+            } else {
+                container.classList.add('open');
+                icon.classList.add('rotate-180');
+                text.textContent = '收起提点规则';
+            }
+        }
+
+        // 保存平均单量大小到本地存储
+        function saveOrderSize() {
+            const orderSizeInput = document.getElementById('orderSize');
+            const orderSize = parseFloat(orderSizeInput.value);
+            
+            if (!isNaN(orderSize) && orderSize > 0) {
+                localStorage.setItem('defaultOrderSize', orderSize);
+                defaultOrderSize = orderSize;
+                
+                // 显示保存状态
+                const saveStatus = document.createElement('div');
+                saveStatus.className = 'mt-1 text-xs text-green-500';
+                saveStatus.textContent = '已保存默认单量大小';
+                
+                // 添加到输入框下方
+                orderSizeInput.parentNode.appendChild(saveStatus);
+                
+                // 3秒后移除
+                setTimeout(() => {
+                    saveStatus.remove();
+                }, 3000);
+            }
+        }
+
+        // 根据R值查找提点
+        function getCommissionRate(rValue) {
+            for (const rule of commissionRules) {
+                if (rValue >= rule.min && rValue < rule.max) {
+                    return rule.rate;
+                }
+            }
+            return 0; // 默认提点
+        }
+
+        // 获取当前规则和下一档规则
+        function getCurrentAndNextTier(rValue) {
+            for (let i = 0; i < commissionRules.length; i++) {
+                const rule = commissionRules[i];
+                if (rValue >= rule.min && rValue < rule.max) {
+                    // 如果不是最后一档，返回下一档信息
+                    if (i < commissionRules.length - 1) {
+                        return {
+                            current: rule,
+                            next: commissionRules[i + 1]
+                        };
+                    }
+                    // 最后一档，没有下一档
+                    return {
+                        current: rule,
+                        next: null
+                    };
+                }
+            }
+            return null;
+        }
+
+        // 保存计算历史
+        function saveHistory(liangji, gmv, rValue, commissionRate, commissionAmount, nextTierRate, distanceToNextTier, diffWholeOrders, nextTierCommission, extraEarnings) {
+            const record = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleString(),
+                liangji,
+                gmv,
+                rValue,
+                commissionRate,
+                commissionAmount,
+                nextTierRate,
+                distanceToNextTier,
+                diffWholeOrders,
+                nextTierCommission,
+                extraEarnings
+            };
+            
+            // 添加到历史记录
+            historyRecords.unshift(record);
+            
+            // 限制最多保存20条记录
+            if (historyRecords.length > 20) {
+                historyRecords.pop();
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('commissionHistory', JSON.stringify(historyRecords));
+            
+            // 更新历史记录显示
+            renderHistory();
+        }
+
+        // 渲染历史记录
+        function renderHistory() {
+            const historyList = document.getElementById('historyList');
+            const emptyHistory = document.getElementById('emptyHistory');
+            
+            if (historyRecords.length === 0) {
+                emptyHistory.style.display = 'block';
+                historyList.innerHTML = '';
+                return;
+            }
+            
+            emptyHistory.style.display = 'none';
+            historyList.innerHTML = '';
+            
+            historyRecords.forEach(record => {
+                const item = document.createElement('div');
+                item.className = 'bg-gray-50 p-2.5 rounded-lg hover:shadow-md transition-all duration-200';
+                
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-medium text-gray-700">${record.timestamp}</span>
+                        <button class="text-red-500 hover:text-red-700 text-xs delete-history" data-id="${record.id}">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 text-xs">
+                        <div>量级: ${record.liangji}</div>
+                        <div>GMV: ${record.gmv}</div>
+                        <div>R值: ${record.rValue}</div>
+                        <div>提点: ${record.commissionRate}</div>
+                        <div>提成: <span class="font-medium text-secondary">${record.commissionAmount}</span></div>
+                        ${record.nextTierRate !== '已满提' ? `
+                        <div>距离跳点: ${record.distanceToNextTier}</div>
+                        <div>差整单: ${record.diffWholeOrders}</div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                historyList.appendChild(item);
+            });
+            
+            // 添加删除历史记录事件
+            document.querySelectorAll('.delete-history').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = parseInt(this.dataset.id);
+                    historyRecords = historyRecords.filter(record => record.id !== id);
+                    localStorage.setItem('commissionHistory', JSON.stringify(historyRecords));
+                    renderHistory();
+                });
+            });
+        }
+
+        // 计算并更新结果
+        function calculate() {
+            const liangji = parseFloat(document.getElementById('liangji').value);
+            const gmv = parseFloat(document.getElementById('gmv').value);
+            const orderSize = parseFloat(document.getElementById('orderSize').value) || defaultOrderSize;
+            
+            if (isNaN(liangji) || isNaN(gmv) || liangji <= 0 || gmv <= 0) {
+                alert('请输入有效的量级和GMV！');
+                return;
+            }
+            
+            // 保存平均单量大小
+            saveOrderSize();
+            
+            const rValue = gmv / liangji;
+            const commissionRate = getCommissionRate(rValue);
+            const commissionAmount = gmv * commissionRate;
+            
+            const tierInfo = getCurrentAndNextTier(rValue);
+            
+            let nextTierRate = '--';
+            let distanceToNextTier = '--';
+            let diffWholeOrders = '--';
+            let nextTierCommission = '--';
+            let extraEarnings = '--';
+            
+            if (tierInfo && tierInfo.next) {
+                // 计算距离下一档的流水差
+                const requiredRValue = tierInfo.next.min;
+                const requiredGmv = requiredRValue * liangji;
+                const distance = Math.max(0, requiredGmv - gmv);
+                
+                // 计算差整单（保留一位小数）
+                const wholeOrders = (distance / orderSize).toFixed(1);
+                
+                // 计算跳点后的提成
+                const newGmv = gmv + distance;
+                const newCommission = newGmv * tierInfo.next.rate;
+                const extra = newCommission - commissionAmount;
+                
+                // 更新结果
+                nextTierRate = (tierInfo.next.rate * 100).toFixed(2) + '%';
+                distanceToNextTier = '¥' + distance.toFixed(2);
+                diffWholeOrders = wholeOrders + '单';
+                nextTierCommission = '¥' + newCommission.toFixed(2);
+                extraEarnings = '¥' + extra.toFixed(2);
+            } else {
+                // 已经是最高档
+                nextTierRate = '已满提';
+                distanceToNextTier = '¥0.00';
+                diffWholeOrders = '0.0单';
+                nextTierCommission = '¥' + commissionAmount.toFixed(2);
+                extraEarnings = '¥0.00';
+            }
+            
+            // 更新结果显示
+            document.getElementById('rValue').textContent = rValue.toFixed(2);
+            document.getElementById('commissionRate').textContent = (commissionRate * 100).toFixed(2) + '%';
+            document.getElementById('commissionAmount').textContent = '¥' + commissionAmount.toFixed(2);
+            document.getElementById('nextTierRate').textContent = nextTierRate;
+            document.getElementById('distanceToNextTier').textContent = distanceToNextTier;
+            document.getElementById('diffWholeOrders').textContent = diffWholeOrders;
+            document.getElementById('nextTierCommission').textContent = nextTierCommission;
+            document.getElementById('extraEarnings').textContent = extraEarnings;
+            
+            document.getElementById('resultContainer').style.display = 'grid';
+            
+            // 保存历史记录
+            saveHistory(
+                liangji, gmv, rValue.toFixed(2), 
+                (commissionRate * 100).toFixed(2) + '%', '¥' + commissionAmount.toFixed(2),
+                nextTierRate, distanceToNextTier, diffWholeOrders,
+                nextTierCommission, extraEarnings
+            );
+            
+            // 添加计算动画效果
+            const resultCard = document.getElementById('resultContainer').parentElement;
+            resultCard.classList.add('ring-2', 'ring-primary/30');
+            setTimeout(() => {
+                resultCard.classList.remove('ring-2', 'ring-primary/30');
+            }, 1000);
+        }
+
+        // 初始化页面
+        function init() {
+            // 设置平均单量大小输入框的默认值
+            document.getElementById('orderSize').value = defaultOrderSize;
+            
+            // 初始化规则表格
+            initRulesTable();
+            
+            // 渲染历史记录
+            renderHistory();
+            
+            // 添加事件监听器
+            document.getElementById('calculateBtn').addEventListener('click', calculate);
+            document.getElementById('saveRulesBtn').addEventListener('click', saveRules);
+            document.getElementById('resetRulesBtn').addEventListener('click', resetRules);
+            document.getElementById('toggleRulesBtn').addEventListener('click', toggleRules);
+            document.getElementById('addRuleBtn').addEventListener('click', addRule);
+            
+            // 为规则输入框添加即时验证
+            document.querySelectorAll('#rulesTable input').forEach(input => {
+                input.addEventListener('change', function() {
+                    const saveStatus = document.getElementById('saveStatus');
+                    saveStatus.textContent = '规则已修改，点击保存生效';
+                    saveStatus.classList.remove('hidden', 'text-green-500', 'text-red-500');
+                    saveStatus.classList.add('text-accent');
+                    saveStatus.style.display = 'block';
+                });
+            });
+            
+            // 为平均单量大小输入框添加失焦保存
+            document.getElementById('orderSize').addEventListener('blur', saveOrderSize);
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMReady', init());
+        window.addEventListener('load', init());
+    </script>
+</body>
+</html>    
