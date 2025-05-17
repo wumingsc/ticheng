@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -283,15 +284,19 @@
     </div>
 
     <script>
+        // 使用0和9999代替无穷大/无穷小
+        const MIN_VALUE = 0;
+        const MAX_VALUE = 9999;
+
         // 更新后的默认提点规则
         const defaultCommissionRules = [
-            { min: -Infinity, max: 50, rate: 0 },
+            { min: MIN_VALUE, max: 50, rate: 0 },
             { min: 50, max: 65, rate: 0.04 },
             { min: 65, max: 80, rate: 0.07 },
             { min: 80, max: 95, rate: 0.10 },
             { min: 95, max: 110, rate: 0.13 },
             { min: 110, max: 130, rate: 0.15 },
-            { min: 130, max: Infinity, rate: 0.18 }
+            { min: 130, max: MAX_VALUE, rate: 0.18 }
         ];
 
         // 默认激励设置
@@ -358,18 +363,14 @@
                 row.classList.add('rule-row');
                 row.setAttribute('data-index', index);
                 
-                // 处理无穷大边界
-                const minDisplay = rule.min === -Infinity ? '负无穷' : rule.min;
-                const maxDisplay = rule.max === Infinity ? '正无穷' : rule.max;
-                
                 row.innerHTML = `
                     <td class="px-3 py-1.5 whitespace-nowrap">
                         <div class="flex items-center">
                             <input type="number" class="w-12 px-2 py-1 border border-gray-300 rounded text-xs input-focus" 
-                                value="${minDisplay}" data-index="${index}" data-field="min">
+                                value="${rule.min}" data-index="${index}" data-field="min">
                             <span class="mx-1 text-xs">≤ R值 <</span>
                             <input type="number" class="w-12 px-2 py-1 border border-gray-300 rounded text-xs input-focus" 
-                                value="${maxDisplay}" data-index="${index}" data-field="max">
+                                value="${rule.max}" data-index="${index}" data-field="max">
                         </div>
                     </td>
                     <td class="px-3 py-1.5 whitespace-nowrap">
@@ -456,20 +457,20 @@
         function addRule() {
             // 获取当前规则中的最大值
             const maxCurrentValue = commissionRules.reduce((max, rule) => {
-                if (rule.max !== Infinity && rule.max !== Infinity && rule.max > max) {
+                if (rule.max > max && rule.max < MAX_VALUE) {
                     return rule.max;
                 }
                 return max;
-            }, -Infinity);
+            }, MIN_VALUE);
             
             // 创建新规则，范围为当前最大值+10
             const newRule = {
                 min: maxCurrentValue,
-                max: maxCurrentValue + 10,
-                rate: 0.01
+                max: Math.min(maxCurrentValue + 10, MAX_VALUE),
+                rate: commissionRules[commissionRules.length - 2].rate + 0.02 // 比上一档高2%
             };
             
-            // 添加到规则数组（倒数第二个位置，最后一个是无穷大）
+            // 添加到规则数组（倒数第二个位置，最后一个是最大值）
             commissionRules.splice(commissionRules.length - 1, 0, newRule);
             
             // 更新表格
@@ -481,7 +482,7 @@
 
         // 删除规则
         function deleteRule(index) {
-            // 不能删除最后一条规则（无穷大那条）
+            // 不能删除最后一条规则（最大值那条）
             if (commissionRules.length <= 1) {
                 alert('至少需要保留一个档位规则');
                 return;
@@ -569,17 +570,15 @@
             ruleInputs.forEach(input => {
                 const index = parseInt(input.dataset.index);
                 const field = input.dataset.field;
-                let value = input.value;
+                let value = parseFloat(input.value);
                 
-                // 处理无穷大
-                if (value === '负无穷') value = -Infinity;
-                if (value === '正无穷') value = Infinity;
-                
-                // 转换为数值
-                if (field !== 'rate') {
-                    value = parseFloat(value);
-                } else {
-                    value = parseFloat(value) / 100; // 转换为小数
+                // 确保值在有效范围内
+                if (field === 'min') {
+                    value = Math.max(MIN_VALUE, Math.min(value, commissionRules[index].max - 0.01));
+                } else if (field === 'max') {
+                    value = Math.max(commissionRules[index].min + 0.01, Math.min(value, MAX_VALUE));
+                } else if (field === 'rate') {
+                    value = Math.max(0, value) / 100; // 转换为小数
                 }
                 
                 commissionRules[index][field] = value;
@@ -596,7 +595,14 @@
             incentiveInputs.forEach(input => {
                 const index = parseInt(input.dataset.index);
                 const field = input.dataset.field;
-                const value = parseFloat(input.value);
+                let value = parseFloat(input.value);
+                
+                // 确保值有效
+                if (field === 'trigger') {
+                    value = Math.max(MIN_VALUE, value);
+                } else if (field === 'amount') {
+                    value = Math.max(0, value);
+                }
                 
                 incentiveRules[index][field] = value;
             });
@@ -617,10 +623,13 @@
 
         // 验证提点规则有效性
         function validateCommissionRules() {
+            // 对commissionRules进行排序，确保按min值从小到大排列
+            const sortedRules = [...commissionRules].sort((a, b) => a.min - b.min);
+            
             // 检查是否有重叠范围和提点是否递增
-            for (let i = 0; i < commissionRules.length - 1; i++) {
-                const current = commissionRules[i];
-                const next = commissionRules[i + 1];
+            for (let i = 0; i < sortedRules.length - 1; i++) {
+                const current = sortedRules[i];
+                const next = sortedRules[i + 1];
                 
                 // 检查范围是否重叠或不连续
                 if (current.max !== next.min) {
@@ -633,15 +642,28 @@
                 }
             }
             
+            // 确保最后一条规则的上限是最大值
+            if (sortedRules[sortedRules.length - 1].max !== MAX_VALUE) {
+                return false;
+            }
+            
+            // 确保第一条规则的下限是最小值
+            if (sortedRules[0].min !== MIN_VALUE) {
+                return false;
+            }
+            
             return true;
         }
 
         // 验证激励规则有效性
         function validateIncentiveRules() {
+            // 对激励规则进行排序，确保按触发值从小到大排列
+            const sortedIncentives = [...incentiveRules].sort((a, b) => a.trigger - b.trigger);
+            
             // 检查触发条件是否递增
-            for (let i = 0; i < incentiveRules.length - 1; i++) {
-                const current = incentiveRules[i];
-                const next = incentiveRules[i + 1];
+            for (let i = 0; i < sortedIncentives.length - 1; i++) {
+                const current = sortedIncentives[i];
+                const next = sortedIncentives[i + 1];
                 
                 if (current.trigger >= next.trigger) {
                     return false;
@@ -716,20 +738,38 @@
 
         // 根据R值查找提点
         function getCommissionRate(rValue) {
-            for (const rule of commissionRules) {
+            // 确保R值是有效的数字
+            if (isNaN(rValue) || rValue <= 0) return 0;
+            
+            // 对commissionRules进行排序，确保按min值从小到大排列
+            const sortedRules = [...commissionRules].sort((a, b) => a.min - b.min);
+            
+            for (const rule of sortedRules) {
                 if (rValue >= rule.min && rValue < rule.max) {
                     return rule.rate;
                 }
             }
-            return 0; // 默认提点
+            
+            // 如果R值超出最大范围，使用最后一档提点
+            if (rValue >= sortedRules[sortedRules.length - 1].max) {
+                return sortedRules[sortedRules.length - 1].rate;
+            }
+            
+            return 0;
         }
 
         // 根据R值计算激励金额
         function calculateIncentive(rValue) {
+            // 确保R值是有效的数字
+            if (isNaN(rValue) || rValue <= 0) return 0;
+            
+            // 对激励规则进行排序，确保按触发值从小到大排列
+            const sortedIncentives = [...incentiveRules].sort((a, b) => a.trigger - b.trigger);
+            
             let totalIncentive = 0;
             
             // 遍历所有激励规则，累加满足条件的激励
-            for (const rule of incentiveRules) {
+            for (const rule of sortedIncentives) {
                 if (rValue >= rule.trigger) {
                     totalIncentive += rule.amount;
                 }
@@ -738,28 +778,51 @@
             return totalIncentive;
         }
 
-        // 计算当前和下一档信息（修复后的逻辑）
+        // 计算当前和下一档信息
         function getCurrentAndNextTier(rValue) {
+            // 确保R值是有效的数字
+            if (isNaN(rValue) || rValue <= 0) return { current: null, next: null };
+            
+            // 对commissionRules进行排序，确保按min值从小到大排列
+            const sortedRules = [...commissionRules].sort((a, b) => a.min - b.min);
+            
             // 找到当前档位
-            const currentTier = commissionRules.find(rule => 
-                (rule.min === -Infinity || rValue >= rule.min) && 
-                (rule.max === Infinity || rValue < rule.max)
-            );
-
-            // 如果当前是最后一档（max为Infinity），则没有下一档
-            if (currentTier && currentTier.max === Infinity) {
-                return { current: currentTier, next: null };
+            let currentTier = null;
+            for (const rule of sortedRules) {
+                if (rValue >= rule.min && rValue < rule.max) {
+                    currentTier = rule;
+                    break;
+                }
             }
-
-            // 寻找下一档：第一个min > rValue的档位
-            const nextTier = commissionRules.find(rule => 
-                rule.min > rValue
-            );
-
+            
+            // 如果没找到当前档位，尝试找到合适的位置
+            if (!currentTier) {
+                for (let i = 0; i < sortedRules.length; i++) {
+                    if (rValue < sortedRules[i].min) {
+                        currentTier = i > 0 ? sortedRules[i - 1] : sortedRules[0];
+                        break;
+                    }
+                }
+                
+                // 如果R值比所有档位的最大值都大，使用最后一档
+                if (!currentTier) {
+                    currentTier = sortedRules[sortedRules.length - 1];
+                }
+            }
+            
+            // 寻找下一档
+            let nextTier = null;
+            if (currentTier && currentTier.max < MAX_VALUE) {
+                const currentIndex = sortedRules.indexOf(currentTier);
+                if (currentIndex < sortedRules.length - 1) {
+                    nextTier = sortedRules[currentIndex + 1];
+                }
+            }
+            
             return { current: currentTier, next: nextTier };
         }
 
-        // 计算并更新结果（修复后的逻辑）
+        // 计算并更新结果
         function calculate() {
             const liangji = parseFloat(document.getElementById('liangji').value);
             const gmv = parseFloat(document.getElementById('gmv').value);
@@ -780,6 +843,9 @@
             // 计算激励
             const incentiveValue = calculateIncentive(rValue);
             const incentiveContainer = document.getElementById('incentiveContainer');
+            
+            // 确保基础提成计算正确
+            console.log('R值:', rValue, '提点:', commissionRate, '基础提成:', baseCommission);
             
             if (incentiveValue > 0) {
                 incentiveContainer.classList.remove('hidden');
