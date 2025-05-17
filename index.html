@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -739,26 +738,96 @@
             return totalIncentive;
         }
 
-        // 获取当前规则和下一档规则
+        // 计算当前和下一档信息（修复后的逻辑）
         function getCurrentAndNextTier(rValue) {
-            for (let i = 0; i < commissionRules.length; i++) {
-                const rule = commissionRules[i];
-                if (rValue >= rule.min && rValue < rule.max) {
-                    // 如果不是最后一档，返回下一档信息
-                    if (i < commissionRules.length - 1) {
-                        return {
-                            current: rule,
-                            next: commissionRules[i + 1]
-                        };
-                    }
-                    // 最后一档，没有下一档
-                    return {
-                        current: rule,
-                        next: null
-                    };
-                }
+            // 找到当前档位
+            const currentTier = commissionRules.find(rule => 
+                (rule.min === -Infinity || rValue >= rule.min) && 
+                (rule.max === Infinity || rValue < rule.max)
+            );
+
+            // 如果当前是最后一档（max为Infinity），则没有下一档
+            if (currentTier && currentTier.max === Infinity) {
+                return { current: currentTier, next: null };
             }
-            return null;
+
+            // 寻找下一档：第一个min > rValue的档位
+            const nextTier = commissionRules.find(rule => 
+                rule.min > rValue
+            );
+
+            return { current: currentTier, next: nextTier };
+        }
+
+        // 计算并更新结果（修复后的逻辑）
+        function calculate() {
+            const liangji = parseFloat(document.getElementById('liangji').value);
+            const gmv = parseFloat(document.getElementById('gmv').value);
+            const orderSize = parseFloat(document.getElementById('orderSize').value) || defaultOrderSize;
+            
+            if (isNaN(liangji) || isNaN(gmv) || liangji <= 0 || gmv <= 0) {
+                alert('请输入有效的量级和GMV！');
+                return;
+            }
+            
+            // 保存平均单量大小
+            saveOrderSizeWithIndicator();
+            
+            const rValue = gmv / liangji;
+            const commissionRate = getCommissionRate(rValue);
+            const baseCommission = gmv * commissionRate;
+            
+            // 计算激励
+            const incentiveValue = calculateIncentive(rValue);
+            const incentiveContainer = document.getElementById('incentiveContainer');
+            
+            if (incentiveValue > 0) {
+                incentiveContainer.classList.remove('hidden');
+                incentiveContainer.classList.add('incentive-active');
+                
+                // 3秒后移除动画类
+                setTimeout(() => {
+                    incentiveContainer.classList.remove('incentive-active');
+                }, 3000);
+            } else {
+                incentiveContainer.classList.add('hidden');
+            }
+
+            const totalCommission = baseCommission + incentiveValue;
+
+            const tierInfo = getCurrentAndNextTier(rValue);
+            let nextTierRate = '已满提';
+            let distanceToNextTier = '已满提';
+            let diffWholeOrders = '已满提';
+            let nextTierCommission = '已满提';
+            let extraEarnings = '已满提';
+
+            if (tierInfo.next) { // 存在有效下一档
+                nextTierRate = tierInfo.next.rate;
+                const nextTierMinRValue = tierInfo.next.min;
+                const nextTierMinGMV = nextTierMinRValue * liangji;
+                
+                distanceToNextTier = Math.max(0, nextTierMinGMV - gmv);
+                diffWholeOrders = (distanceToNextTier / orderSize).toFixed(1);
+                nextTierCommission = nextTierMinGMV * nextTierRate;
+                extraEarnings = nextTierCommission - baseCommission;
+            }
+
+            // 更新结果显示
+            document.getElementById('resultContainer').style.display = 'grid';
+            document.getElementById('rValue').textContent = rValue.toFixed(2);
+            document.getElementById('commissionRate').textContent = (commissionRate * 100).toFixed(2) + '%';
+            document.getElementById('baseCommission').textContent = '¥' + baseCommission.toFixed(2);
+            document.getElementById('incentiveValue').textContent = '¥' + incentiveValue.toFixed(2);
+            document.getElementById('totalCommission').textContent = '¥' + totalCommission.toFixed(2);
+            document.getElementById('nextTierRate').textContent = nextTierRate === '已满提' ? nextTierRate : (nextTierRate * 100).toFixed(2) + '%';
+            document.getElementById('distanceToNextTier').textContent = distanceToNextTier === '已满提' ? distanceToNextTier : '¥' + distanceToNextTier.toFixed(2);
+            document.getElementById('diffWholeOrders').textContent = diffWholeOrders;
+            document.getElementById('nextTierCommission').textContent = nextTierCommission === '已满提' ? nextTierCommission : '¥' + nextTierCommission.toFixed(2);
+            document.getElementById('extraEarnings').textContent = extraEarnings === '已满提' ? extraEarnings : '¥' + extraEarnings.toFixed(2);
+
+            // 保存历史记录
+            saveHistory(liangji, gmv, rValue, commissionRate, baseCommission, incentiveValue, totalCommission, nextTierRate, distanceToNextTier, diffWholeOrders, nextTierCommission, extraEarnings);
         }
 
         // 保存计算历史
@@ -855,85 +924,6 @@
                 });
             });
         }
-
-        // 计算并更新结果
-        function calculate() {
-            const liangji = parseFloat(document.getElementById('liangji').value);
-            const gmv = parseFloat(document.getElementById('gmv').value);
-            const orderSize = parseFloat(document.getElementById('orderSize').value) || defaultOrderSize;
-            
-            if (isNaN(liangji) || isNaN(gmv) || liangji <= 0 || gmv <= 0) {
-                alert('请输入有效的量级和GMV！');
-                return;
-            }
-            
-            // 保存平均单量大小
-            saveOrderSizeWithIndicator();
-            
-            const rValue = gmv / liangji;
-            const commissionRate = getCommissionRate(rValue);
-            const baseCommission = gmv * commissionRate;
-            
-            // 计算激励
-            const incentiveValue = calculateIncentive(rValue);
-            const incentiveContainer = document.getElementById('incentiveContainer');
-            
-            if (incentiveValue > 0) {
-                incentiveContainer.classList.remove('hidden');
-                incentiveContainer.classList.add('incentive-active');
-                
-                // 3秒后移除动画类
-                setTimeout(() => {
-                    incentiveContainer.classList.remove('incentive-active');
-                }, 3000);
-            } else {
-                incentiveContainer.classList.add('hidden');
-            }
-
-            const totalCommission = baseCommission + incentiveValue;
-
-            const tierInfo = getCurrentAndNextTier(rValue);
-            let nextTierRate = '已满提';
-            let distanceToNextTier = '已满提';
-            // 修改差整单显示格式，保留一位小数
-            let diffWholeOrders = '已满提';
-            let nextTierCommission = '已满提';
-            let extraEarnings = '已满提';
-
-            if (tierInfo && tierInfo.next) {
-                nextTierRate = tierInfo.next.rate;
-                const nextTierMinRValue = tierInfo.next.min;
-                const nextTierMinGMV = nextTierMinRValue * liangji;
-                
-                distanceToNextTier = Math.max(0, nextTierMinGMV - gmv);
-                
-                // 计算差整单（向上取整）
-                if (distanceToNextTier > 0) {
-                    diffWholeOrders = (distanceToNextTier / orderSize).toFixed(1);
-                } else {
-                    diffWholeOrders = '0.0';
-                }
-                
-                nextTierCommission = nextTierMinGMV * nextTierRate;
-                extraEarnings = nextTierCommission - baseCommission;
-            }
-
-            // 更新结果显示
-            document.getElementById('resultContainer').style.display = 'grid';
-            document.getElementById('rValue').textContent = rValue.toFixed(2);
-            document.getElementById('commissionRate').textContent = (commissionRate * 100).toFixed(2) + '%';
-            document.getElementById('baseCommission').textContent = '¥' + baseCommission.toFixed(2);
-            document.getElementById('incentiveValue').textContent = '¥' + incentiveValue.toFixed(2);
-            document.getElementById('totalCommission').textContent = '¥' + totalCommission.toFixed(2);
-            document.getElementById('nextTierRate').textContent = nextTierRate === '已满提' ? nextTierRate : (nextTierRate * 100).toFixed(2) + '%';
-            document.getElementById('distanceToNextTier').textContent = distanceToNextTier === '已满提' ? distanceToNextTier : '¥' + distanceToNextTier.toFixed(2);
-            document.getElementById('diffWholeOrders').textContent = diffWholeOrders;
-            document.getElementById('nextTierCommission').textContent = nextTierCommission === '已满提' ? nextTierCommission : '¥' + nextTierCommission.toFixed(2);
-            document.getElementById('extraEarnings').textContent = extraEarnings === '已满提' ? extraEarnings : '¥' + extraEarnings.toFixed(2);
-
-            // 保存历史记录
-            saveHistory(liangji, gmv, rValue, commissionRate, baseCommission, incentiveValue, totalCommission, nextTierRate, distanceToNextTier, diffWholeOrders, nextTierCommission, extraEarnings);
-        }
     </script>
 </body>
-</html>    
+</html>
